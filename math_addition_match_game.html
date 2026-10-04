@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Addition Match Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti Library for celebration -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@600;700&display=swap');
+        
+        body {
+            font-family: 'Quicksand', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            background-color: #0b0d14;
+            color: #f1f5f9;
+        }
+
+        .font-game {
+            font-family: 'Fredoka One', cursive;
+        }
+
+        /* Perspective wrapper for 3D card flipping */
+        .card-container {
+            perspective: 1000px;
+            transform-origin: center center;
+            touch-action: manipulation;
+        }
+
+        /* 3D card inner structure */
+        .card-inner {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transform-origin: center center;
+            transition: transform 0.4s cubic-bezier(0.34, 1.25, 0.64, 1);
+        }
+
+        /* Face-down flipped rotation */
+        .card-container.is-flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        /* Card Face Front & Back placement */
+        .card-face {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            border-radius: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+
+        @media (min-width: 640px) {
+            .card-face {
+                border-radius: 1.75rem;
+            }
+        }
+
+        /* Front face showing glowing neon content */
+        .card-front {
+            transform: rotateY(0deg);
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(8px);
+        }
+
+        /* Dynamic neon glow utilities */
+        .neon-card-front {
+            border-width: 3px;
+            border-style: solid;
+            transition: border-width 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        /* Back face when hidden in Memory Mode */
+        .card-back {
+            transform: rotateY(180deg);
+            background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+            border: 3px solid #6366f1;
+            color: #818cf8;
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.4), inset 0 0 10px rgba(99, 102, 241, 0.2);
+        }
+
+        /* Bold active selection highlight for cards */
+        .card-selected .neon-card-front {
+            border-width: 5px !important;
+            outline: 3px solid #ffffff;
+            outline-offset: 3px;
+            box-shadow: 0 0 25px #ffffff, 0 0 20px currentColor, inset 0 0 15px currentColor !important;
+            animation: pulse-selected 0.8s infinite alternate ease-in-out;
+        }
+
+        .card-selected .card-back {
+            border-width: 4px !important;
+            outline: 3px solid #6366f1;
+            outline-offset: 3px;
+            box-shadow: 0 0 25px rgba(99, 102, 241, 0.9), inset 0 0 15px rgba(99, 102, 241, 0.5) !important;
+        }
+
+        @keyframes pulse-selected {
+            0% { outline-color: rgba(255, 255, 255, 1); }
+            100% { outline-color: rgba(255, 255, 255, 0.4); }
+        }
+
+        /* Shake animation for incorrect matches */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-8px) rotate(-3deg); }
+            40% { transform: translateX(8px) rotate(3deg); }
+            60% { transform: translateX(-6px) rotate(-2deg); }
+            80% { transform: translateX(6px) rotate(2deg); }
+        }
+
+        .animate-shake {
+            animation: shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+        }
+
+        /* Pop-in animation for matched state */
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+
+        .animate-pop {
+            animation: pop 0.4s ease-out both;
+        }
+
+        /* Life Bar Fill Transitions */
+        .life-bar-fill {
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+        }
+
+        @keyframes life-warning-red {
+            0%, 100% { box-shadow: 0 0 15px #ef4444, inset 0 0 8px #fca5a5; }
+            50% { box-shadow: 0 0 30px #dc2626, 0 0 10px #ff0000, inset 0 0 15px #ffffff; }
+        }
+
+        @keyframes life-warning-cyan {
+            0%, 100% { box-shadow: 0 0 15px #06b6d4, inset 0 0 8px #a5f3fc; }
+            50% { box-shadow: 0 0 30px #0891b2, 0 0 10px #00f0ff, inset 0 0 15px #ffffff; }
+        }
+
+        @keyframes life-warning-pink {
+            0%, 100% { box-shadow: 0 0 15px #ec4899, inset 0 0 8px #fbcfe8; }
+            50% { box-shadow: 0 0 30px #db2777, 0 0 10px #ff00aa, inset 0 0 15px #ffffff; }
+        }
+
+        .life-bar-critical-red { animation: life-warning-red 0.6s infinite ease-in-out alternate; }
+        .life-bar-critical-cyan { animation: life-warning-cyan 0.6s infinite ease-in-out alternate; }
+        .life-bar-critical-pink { animation: life-warning-pink 0.6s infinite ease-in-out alternate; }
+
+        /* Active turn player glowing indicator animations */
+        .turn-active-p1 {
+            border-color: #06b6d4 !important;
+            box-shadow: 0 0 18px rgba(6, 182, 212, 0.8) !important;
+            background-color: rgba(6, 182, 212, 0.2) !important;
+            color: #22d3ee !important;
+        }
+
+        .turn-active-p2 {
+            border-color: #ec4899 !important;
+            box-shadow: 0 0 18px rgba(236, 72, 153, 0.8) !important;
+            background-color: rgba(236, 72, 153, 0.2) !important;
+            color: #f472b6 !important;
+        }
+
+        /* Ambient background glow */
+        .bg-shape {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.15;
+            filter: blur(60px);
+            z-index: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-[#0b0d14] min-h-screen flex flex-col justify-between items-center p-3 sm:p-6 text-slate-100 relative overflow-x-hidden">
+
+    <div class="bg-shape bg-fuchsia-600 w-80 h-80 -top-16 -left-16"></div>
+    <div class="bg-shape bg-cyan-500 w-96 h-96 top-1/2 -right-24"></div>
+    <div class="bg-shape bg-amber-600 w-80 h-80 -bottom-20 left-1/3"></div>
+
+    <header class="w-full z-10 flex flex-col lg:flex-row justify-between items-center gap-3 mb-2 sm:mb-3 px-2 sm:px-6">
+        <div class="flex items-center gap-3">
+            <div class="bg-slate-900 border-2 border-cyan-400 text-cyan-400 p-2.5 sm:p-3 rounded-2xl shadow-[0_0_15px_rgba(34,211,238,0.5)] transform -rotate-3 text-2xl sm:text-3xl font-game flex items-center gap-1">
+                <span>+</span><span class="text-xl sm:text-2xl text-fuchsia-400">=</span>
+            </div>
+            <div>
+                <h1 class="text-2xl sm:text-4xl md:text-5xl font-game text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-300 tracking-wide drop-shadow-[0_0_12px_rgba(168,85,247,0.5)]">Addition Match</h1>
+                <p class="text-xs sm:text-sm text-slate-400 font-semibold">Match addition equations to their correct sum!</p>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 bg-slate-900/80 backdrop-blur-md px-3 sm:px-4 py-2 rounded-2xl border border-slate-700/60 shadow-[0_0_20px_rgba(0,0,0,0.8)]">
+            <!-- Player Count Toggle (1P vs 2P) -->
+            <div class="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs sm:text-sm font-bold">
+                <button id="players1Btn" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 bg-cyan-500 text-slate-950 font-black shadow-[0_0_12px_rgba(6,182,212,0.6)]" title="1 Player Game">
+                    <i class="fa-solid fa-user"></i>
+                    <span>1P</span>
+                </button>
+                <button id="players2Btn" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 text-slate-400 hover:text-cyan-300" title="2 Players Versus Game">
+                    <i class="fa-solid fa-user-group"></i>
+                    <span>2P</span>
+                </button>
+            </div>
+
+            <!-- Mode Toggle Switch -->
+            <div class="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs sm:text-sm font-bold">
+                <button id="modeFaceUpBtn" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 bg-cyan-500 text-slate-950 font-black shadow-[0_0_12px_rgba(6,182,212,0.6)]" title="All cards face up">
+                    <i class="fa-solid fa-eye"></i>
+                    <span>Face Up</span>
+                </button>
+                <button id="modeMemoryBtn" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 text-slate-400 hover:text-cyan-300" title="Memory game: flip cards over">
+                    <i class="fa-solid fa-brain"></i>
+                    <span>Memory</span>
+                </button>
+            </div>
+
+            <!-- Maximum Number Input Box -->
+            <div class="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-xl border border-slate-800">
+                <label for="maxAddendInput" class="text-xs sm:text-sm font-bold text-amber-400 whitespace-nowrap" title="Maximum number that can be added in equations">Max Num:</label>
+                <input type="number" id="maxAddendInput" value="10" min="2" max="100" class="w-14 sm:w-16 bg-slate-900 border border-slate-700 text-amber-300 font-game text-center text-xs sm:text-sm rounded-lg px-1 py-1 focus:outline-none focus:ring-2 focus:ring-amber-400" title="Set highest number added (2-100)">
+            </div>
+
+            <!-- Pair Count Selection -->
+            <div class="flex items-center gap-1.5">
+                <label for="pairSelect" class="text-xs sm:text-sm font-bold text-slate-300 whitespace-nowrap">Pairs:</label>
+                <select id="pairSelect" class="bg-slate-950 border border-slate-700 text-cyan-300 font-game text-xs sm:text-sm rounded-xl px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-cyan-400 cursor-pointer">
+                    <option value="4">4 (8 Cards)</option>
+                    <option value="6" selected>6 (12 Cards)</option>
+                    <option value="8">8 (16 Cards)</option>
+                    <option value="10">10 (20 Cards)</option>
+                    <option value="12">12 (24 Cards)</option>
+                </select>
+            </div>
+
+            <!-- Max Lives / Misses Selection -->
+            <div class="flex items-center gap-1.5">
+                <label for="maxLivesSelect" class="text-xs sm:text-sm font-bold text-red-400 whitespace-nowrap"><i class="fa-solid fa-heart mr-0.5"></i> Lives:</label>
+                <select id="maxLivesSelect" class="bg-slate-950 border border-red-900/80 text-red-400 font-game text-xs sm:text-sm rounded-xl px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-500 cursor-pointer" title="Max Misses Allowed">
+                    <!-- Dynamically populated -->
+                </select>
+            </div>
+
+            <!-- Leaderboard Button -->
+            <button id="leaderboardBtn" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 active:scale-95 text-slate-950 font-game px-3 py-1.5 rounded-xl shadow-[0_0_12px_rgba(245,158,11,0.5)] transition-all flex items-center gap-1.5 text-xs sm:text-sm" title="View Time Leaderboard">
+                <i class="fa-solid fa-trophy"></i>
+                <span>Scores</span>
+            </button>
+
+            <button id="resetBtn" class="bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 active:scale-95 text-white font-game px-3 py-1.5 rounded-xl shadow-[0_0_12px_rgba(217,70,239,0.5)] transition-all flex items-center gap-1.5 text-xs sm:text-sm">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>Reset</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 1-Player Status Bar -->
+    <div id="statusBar1P" class="w-full z-10 flex justify-around items-center px-4 py-2 mb-2 bg-slate-900/60 backdrop-blur-md rounded-xl border border-slate-800 text-xs sm:text-sm font-bold">
+        <div>
+            <span class="text-slate-400">Matched: </span>
+            <span id="matchCount" class="font-game text-cyan-400 text-base">0</span>
+            <span class="text-slate-500"> / </span>
+            <span id="totalPairs" class="font-game text-slate-300">6</span>
+        </div>
+        <div>
+            <span class="text-slate-400">Mode: </span>
+            <span id="currentModeLabel" class="font-game text-fuchsia-400">Face Up</span>
+        </div>
+        <div>
+            <span class="text-slate-400">Tries: </span>
+            <span id="triesCount" class="font-game text-amber-400 text-base">0</span>
+        </div>
+    </div>
+
+    <!-- 2-Player Versus Status Bar -->
+    <div id="statusBar2P" class="w-full z-10 hidden justify-between items-center px-3 sm:px-6 py-2 mb-2 bg-slate-900/60 backdrop-blur-md rounded-xl border border-slate-800 gap-2">
+        <!-- Player 1 Score Card -->
+        <div id="p1ScoreCard" class="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-800 text-slate-400 transition-all duration-300">
+            <div class="w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"></div>
+            <span class="font-game text-xs sm:text-sm">P1</span>
+            <span id="p1Score" class="font-game text-lg sm:text-xl text-cyan-400">0</span>
+        </div>
+
+        <!-- Center Turn Banner -->
+        <div class="flex items-center gap-1.5 bg-slate-950 px-3 py-1 rounded-full border border-slate-800">
+            <i class="fa-solid fa-gamepad text-xs text-amber-400"></i>
+            <span id="turnIndicator" class="font-game text-xs sm:text-sm text-cyan-400 uppercase tracking-wide">Player 1's Turn</span>
+        </div>
+
+        <!-- Player 2 Score Card -->
+        <div id="p2ScoreCard" class="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-800 text-slate-400 transition-all duration-300">
+            <span id="p2Score" class="font-game text-lg sm:text-xl text-fuchsia-400">0</span>
+            <span class="font-game text-xs sm:text-sm">P2</span>
+            <div class="w-3 h-3 rounded-full bg-fuchsia-400 shadow-[0_0_8px_#e879f9]"></div>
+        </div>
+    </div>
+
+    <div class="w-full flex-grow flex flex-col lg:flex-row items-center lg:items-stretch justify-center gap-3 sm:gap-4 z-10 my-auto py-2 px-2 sm:px-6">
+        
+        <!-- LEFT PANEL: P1 / 1P Life Bar -->
+        <div id="leftSidePanel" class="w-full lg:w-48 bg-slate-900/90 backdrop-blur-md rounded-3xl border-2 border-red-600/70 p-3 sm:p-4 flex lg:flex-col items-center justify-between gap-3 shadow-[0_0_30px_rgba(239,68,68,0.3)] transition-all shrink-0">
+            <div class="flex items-center lg:flex-col gap-2 text-center">
+                <div id="p1HeartBox" class="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-red-950/90 border-2 border-red-500/80 flex items-center justify-center text-red-500 text-xl sm:text-2xl shadow-[0_0_15px_rgba(239,68,68,0.8)]">
+                    <i class="fa-solid fa-heart animate-pulse"></i>
+                </div>
+                <div>
+                    <span id="p1LifeTitle" class="block text-xs sm:text-sm font-black text-red-400 tracking-wider uppercase">Life Bar</span>
+                    <span id="p1SubTitle" class="text-[10px] sm:text-xs text-slate-400 font-bold hidden lg:block">1P Mode</span>
+                </div>
+            </div>
+
+            <!-- Life Bar Track & Gauge -->
+            <div class="flex-grow lg:flex-grow-0 w-full lg:w-16 h-8 sm:h-9 lg:h-72 bg-slate-950 rounded-2xl border-2 border-red-800/90 p-1.5 flex lg:flex-col-reverse items-center justify-start relative overflow-hidden shadow-[inset_0_0_15px_rgba(0,0,0,0.9)]">
+                <div id="p1LifeBarFill" class="life-bar-fill h-full lg:w-full bg-gradient-to-r lg:bg-gradient-to-t from-red-600 via-rose-500 to-red-400 rounded-xl w-full shadow-[0_0_20px_#ef4444]"></div>
+            </div>
+
+            <!-- Lives Counter Display -->
+            <div class="text-right lg:text-center font-game">
+                <div id="p1LivesNum" class="text-xl sm:text-2xl lg:text-3xl text-red-400 drop-shadow-[0_0_12px_rgba(239,68,68,0.9)]">
+                    <span id="p1LivesText">12</span>
+                </div>
+                <div class="text-[10px] sm:text-xs text-slate-400 font-sans font-bold">
+                    of <span id="p1MaxLivesText">12</span> Lives
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN CONTENT: Card Grid -->
+        <main class="w-full flex-grow flex items-center justify-center min-h-[300px]">
+            <div id="cardGrid" class="w-full grid gap-2.5 sm:gap-4 justify-items-center items-center">
+                <!-- Cards generated dynamically -->
+            </div>
+        </main>
+
+        <!-- RIGHT PANEL: Timer for 1P Mode / P2 Life Bar for 2P Mode -->
+        <div id="rightSidePanel" class="w-full lg:w-48 bg-slate-900/90 backdrop-blur-md rounded-3xl border-2 border-amber-500/70 p-3 sm:p-4 flex flex-row lg:flex-col items-center justify-between gap-3 shadow-[0_0_30px_rgba(245,158,11,0.3)] transition-all shrink-0">
+            
+            <!-- 1P Mode: Timer & Best Record Display -->
+            <div id="p1TimerContainer" class="w-full flex flex-row lg:flex-col items-center justify-between gap-3">
+                <div class="flex items-center lg:flex-col gap-2 text-center">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-950/90 border-2 border-amber-500/80 flex items-center justify-center text-amber-400 text-xl sm:text-2xl shadow-[0_0_15px_rgba(245,158,11,0.8)]">
+                        <i class="fa-solid fa-stopwatch animate-pulse"></i>
+                    </div>
+                    <div>
+                        <span class="block text-xs sm:text-sm font-black text-amber-400 tracking-wider uppercase">Timer</span>
+                        <span id="timerStatusSub" class="text-[10px] sm:text-xs text-slate-400 font-bold hidden lg:block">Tap card to start</span>
+                    </div>
+                </div>
+
+                <!-- Timer Live Box -->
+                <div class="bg-slate-950 px-3 py-2 rounded-2xl border-2 border-amber-500/60 shadow-[inset_0_0_15px_rgba(0,0,0,0.9),0_0_15px_rgba(245,158,11,0.3)] text-center w-36 sm:w-44 flex items-center justify-center shrink-0">
+                    <div id="timerDisplay" class="font-mono tabular-nums font-bold text-2xl sm:text-3xl lg:text-3xl text-amber-300 drop-shadow-[0_0_10px_rgba(245,158,11,0.9)] tracking-wider">
+                        00:00.0
+                    </div>
+                </div>
+
+                <div class="text-right lg:text-center font-game">
+                    <div class="text-xs text-slate-400 font-sans font-bold">Best Record</div>
+                    <div id="bestTimeDisplay" class="text-sm sm:text-base text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">
+                        --:--.-
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2P Mode: Player 2 Life Bar -->
+            <div id="p2LifeContainer" class="w-full hidden flex-row lg:flex-col items-center justify-between gap-3">
+                <div class="flex items-center lg:flex-col gap-2 text-center">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-pink-950/90 border-2 border-pink-500/80 flex items-center justify-center text-pink-400 text-xl sm:text-2xl shadow-[0_0_15px_rgba(236,72,153,0.8)]">
+                        <i class="fa-solid fa-heart animate-pulse"></i>
+                    </div>
+                    <div>
+                        <span class="block text-xs sm:text-sm font-black text-pink-400 tracking-wider uppercase">P2 Life Bar</span>
+                        <span class="text-[10px] sm:text-xs text-slate-400 font-bold hidden lg:block">Player 2</span>
+                    </div>
+                </div>
+
+                <!-- Life Bar Track & Gauge for P2 -->
+                <div class="flex-grow lg:flex-grow-0 w-full lg:w-16 h-8 sm:h-9 lg:h-72 bg-slate-950 rounded-2xl border-2 border-pink-800/90 p-1.5 flex lg:flex-col-reverse items-center justify-start relative overflow-hidden shadow-[inset_0_0_15px_rgba(0,0,0,0.9)]">
+                    <div id="p2LifeBarFill" class="life-bar-fill h-full lg:w-full bg-gradient-to-r lg:bg-gradient-to-t from-pink-600 via-fuchsia-500 to-pink-400 rounded-xl w-full shadow-[0_0_20px_#ec4899]"></div>
+                </div>
+
+                <!-- Lives Counter Display for P2 -->
+                <div class="text-right lg:text-center font-game">
+                    <div class="text-xl sm:text-2xl lg:text-3xl text-pink-400 drop-shadow-[0_0_12px_rgba(236,72,153,0.9)]">
+                        <span id="p2LivesText">6</span>
+                    </div>
+                    <div class="text-[10px] sm:text-xs text-slate-400 font-sans font-bold">
+                        of <span id="p2MaxLivesText">6</span> Lives
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Victory Celebration Modal -->
+    <div id="victoryModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden transition-opacity duration-300">
+        <div class="bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-[0_0_50px_rgba(168,85,247,0.4)] border-2 border-fuchsia-500 transform scale-95 transition-transform duration-300 relative overflow-hidden">
+            <div class="text-6xl sm:text-7xl mb-3 animate-bounce">⚡</div>
+            <h2 id="victoryTitle" class="text-3xl sm:text-4xl font-game text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-300 mb-2">SUM MASTER!</h2>
+            <p id="victorySubtitle" class="text-slate-300 font-semibold mb-5 text-sm sm:text-base">All addition equations matched to their sums!</p>
+            
+            <div id="modalStats1P" class="bg-slate-950/80 rounded-2xl p-4 mb-6 flex justify-around items-center border border-slate-800">
+                <div>
+                    <span class="block text-xs text-slate-400 uppercase tracking-wider font-bold">Pairs</span>
+                    <span id="modalPairs" class="text-xl sm:text-2xl font-game text-cyan-400">6</span>
+                </div>
+                <div class="w-px h-8 bg-slate-800"></div>
+                <div>
+                    <span class="block text-xs text-slate-400 uppercase tracking-wider font-bold">Tries</span>
+                    <span id="modalTries" class="text-xl sm:text-2xl font-game text-amber-400">6</span>
+                </div>
+                <div class="w-px h-8 bg-slate-800"></div>
+                <div>
+                    <span class="block text-xs text-slate-400 uppercase tracking-wider font-bold">Time</span>
+                    <span id="modalTime" class="text-xl sm:text-2xl font-game text-emerald-400">00:00.0</span>
+                </div>
+            </div>
+
+            <!-- 2-Player Winner Summary Stats -->
+            <div id="modalStats2P" class="hidden bg-slate-950/80 rounded-2xl p-4 mb-6 flex justify-around border border-slate-800">
+                <div>
+                    <span class="block text-xs text-cyan-400 uppercase tracking-wider font-bold">Player 1</span>
+                    <span id="modalP1Score" class="text-2xl font-game text-cyan-400">0</span>
+                </div>
+                <div class="w-px bg-slate-800"></div>
+                <div>
+                    <span class="block text-xs text-fuchsia-400 uppercase tracking-wider font-bold">Player 2</span>
+                    <span id="modalP2Score" class="text-2xl font-game text-fuchsia-400">0</span>
+                </div>
+            </div>
+
+            <button id="modalPlayAgainBtn" class="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-95 text-slate-950 font-black text-lg sm:text-xl py-3.5 rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.5)] transition-all flex items-center justify-center gap-2">
+                <i class="fa-solid fa-play"></i>
+                <span>PLAY AGAIN</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- GAME OVER Modal (Life Bar Depleted) -->
+    <div id="gameOverModal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden transition-opacity duration-300">
+        <div class="bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-[0_0_60px_rgba(239,68,68,0.5)] border-2 border-red-500 transform scale-95 transition-transform duration-300 relative overflow-hidden">
+            <div class="text-6xl sm:text-7xl mb-3">💔</div>
+            <h2 class="text-3xl sm:text-4xl font-game text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-rose-400 to-amber-400 mb-2 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]">GAME OVER</h2>
+            <p id="gameOverSubtitle" class="text-slate-300 font-semibold mb-5 text-sm sm:text-base">Your life bar ran out of power!</p>
+
+            <div class="bg-slate-950/80 rounded-2xl p-4 mb-6 flex justify-around border border-slate-800">
+                <div>
+                    <span class="block text-xs text-slate-400 uppercase tracking-wider font-bold">Pairs Matched</span>
+                    <span id="gameOverMatched" class="text-2xl font-game text-cyan-400">0</span>
+                </div>
+                <div class="w-px bg-slate-800"></div>
+                <div>
+                    <span class="block text-xs text-slate-400 uppercase tracking-wider font-bold">Max Misses</span>
+                    <span id="gameOverMaxMisses" class="text-2xl font-game text-red-400">10</span>
+                </div>
+            </div>
+
+            <button id="gameOverTryAgainBtn" class="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 active:scale-95 text-white font-black text-lg sm:text-xl py-3.5 rounded-2xl shadow-[0_0_20px_rgba(239,68,68,0.6)] transition-all flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>TRY AGAIN</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Leaderboard History Modal -->
+    <div id="leaderboardModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden transition-opacity duration-300">
+        <div class="bg-slate-900 rounded-3xl p-5 sm:p-7 max-w-lg w-full text-center shadow-[0_0_50px_rgba(245,158,11,0.4)] border-2 border-amber-500 transform scale-95 transition-transform duration-300 relative overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2 text-amber-400 font-game text-xl sm:text-2xl">
+                    <i class="fa-solid fa-trophy text-2xl"></i>
+                    <span>LEADERBOARD</span>
+                </div>
+                <button id="closeLeaderboardBtn" class="text-slate-400 hover:text-white text-xl p-1 font-bold">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Leaderboard filter tabs -->
+            <div class="flex justify-center gap-1.5 mb-3 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-bold">
+                <button id="lbFilterAll" class="px-3 py-1 rounded-lg bg-amber-500 text-slate-950">All</button>
+                <button id="lbFilterFaceUp" class="px-3 py-1 rounded-lg text-slate-400 hover:text-white">Face Up</button>
+                <button id="lbFilterMemory" class="px-3 py-1 rounded-lg text-slate-400 hover:text-white">Memory</button>
+            </div>
+
+            <!-- Leaderboard table container -->
+            <div class="overflow-y-auto flex-grow rounded-2xl bg-slate-950 p-2 border border-slate-800">
+                <table class="w-full text-left text-xs sm:text-sm">
+                    <thead>
+                        <tr class="text-slate-400 border-b border-slate-800 font-bold uppercase text-[10px] sm:text-xs">
+                            <th class="py-2 px-2">#</th>
+                            <th class="py-2 px-2">Mode</th>
+                            <th class="py-2 px-2">Max Num</th>
+                            <th class="py-2 px-2">Pairs</th>
+                            <th class="py-2 px-2">Time</th>
+                            <th class="py-2 px-2 text-right">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+                <div id="noLeaderboardMsg" class="text-slate-500 py-6 font-semibold text-xs">No recorded times yet! Play a single player game to log a score.</div>
+            </div>
+
+            <div class="flex items-center justify-between gap-3 mt-4 pt-2 border-t border-slate-800">
+                <button id="clearLeaderboardBtn" class="text-red-400 hover:text-red-300 text-xs font-bold flex items-center gap-1 px-2 py-1">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>Clear History</span>
+                </button>
+                <button id="closeLeaderboardFooterBtn" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-game px-5 py-2 rounded-xl text-sm font-black">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="w-full z-10 text-center text-xs text-slate-500 py-2">
+        Tap or click cards to match addition problems with their correct sums
+    </footer>
+
+    <script>
+        const NEON_PALETTE = [
+            '#ff0055', '#00f0ff', '#00ff66', '#ffb700', '#b500ff', '#ff00aa',
+            '#3b82f6', '#00f5d4', '#ff5500', '#f72585', '#70e000', '#00b4d8',
+            '#9d4edd', '#ff4365', '#ffbe0b', '#10b981', '#4361ee', '#e0aaff'
+        ];
+
+        let maxAddend = 10;       // Maximum single number in addition equation
+        let numPairs = 6;
+        let gameMode = 'face-up';  // 'face-up' or 'memory'
+        let playerCount = 1;        // 1 or 2
+        let activePlayer = 1;      // 1 or 2
+        let p1Score = 0;
+        let p2Score = 0;
+        
+        let maxLivesSetting = 12; // Total setting chosen in dropdown
+        let p1Lives = 12;
+        let p1MaxLives = 12;
+        let p2Lives = 6;
+        let p2MaxLives = 6;
+
+        let cards = [];
+        let selectedCards = [];
+        let matchedPairsCount = 0;
+        let triesCount = 0;
+        let isProcessing = false;
+
+        // Timer State Variables
+        let startTime = 0;
+        let elapsedTime = 0;
+        let timerInterval = null;
+        let isTimerRunning = false;
+        let hasTimerStarted = false;
+        let currentLeaderboardFilter = 'all';
+        let leaderboardHistory = JSON.parse(localStorage.getItem('addition_match_leaderboard') || '[]');
+
+        // DOM Element Cache
+        const cardGrid = document.getElementById('cardGrid');
+        const maxAddendInput = document.getElementById('maxAddendInput');
+        const pairSelect = document.getElementById('pairSelect');
+        const maxLivesSelect = document.getElementById('maxLivesSelect');
+        const resetBtn = document.getElementById('resetBtn');
+        const leaderboardBtn = document.getElementById('leaderboardBtn');
+        const players1Btn = document.getElementById('players1Btn');
+        const players2Btn = document.getElementById('players2Btn');
+        const modeFaceUpBtn = document.getElementById('modeFaceUpBtn');
+        const modeMemoryBtn = document.getElementById('modeMemoryBtn');
+
+        const statusBar1P = document.getElementById('statusBar1P');
+        const statusBar2P = document.getElementById('statusBar2P');
+
+        const matchCountEl = document.getElementById('matchCount');
+        const totalPairsEl = document.getElementById('totalPairs');
+        const triesCountEl = document.getElementById('triesCount');
+        const currentModeLabel = document.getElementById('currentModeLabel');
+
+        const p1ScoreCard = document.getElementById('p1ScoreCard');
+        const p2ScoreCard = document.getElementById('p2ScoreCard');
+        const p1ScoreEl = document.getElementById('p1Score');
+        const p2ScoreEl = document.getElementById('p2Score');
+        const turnIndicator = document.getElementById('turnIndicator');
+
+        // Side Panels & Timer DOM
+        const leftSidePanel = document.getElementById('leftSidePanel');
+        const rightSidePanel = document.getElementById('rightSidePanel');
+        const p1TimerContainer = document.getElementById('p1TimerContainer');
+        const p2LifeContainer = document.getElementById('p2LifeContainer');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const timerStatusSub = document.getElementById('timerStatusSub');
+        const bestTimeDisplay = document.getElementById('bestTimeDisplay');
+
+        const p1HeartBox = document.getElementById('p1HeartBox');
+        const p1LifeTitle = document.getElementById('p1LifeTitle');
+        const p1SubTitle = document.getElementById('p1SubTitle');
+        const p1LifeBarFill = document.getElementById('p1LifeBarFill');
+        const p1LivesNum = document.getElementById('p1LivesNum');
+        const p1LivesText = document.getElementById('p1LivesText');
+        const p1MaxLivesText = document.getElementById('p1MaxLivesText');
+
+        const p2LifeBarFill = document.getElementById('p2LifeBarFill');
+        const p2LivesText = document.getElementById('p2LivesText');
+        const p2MaxLivesText = document.getElementById('p2MaxLivesText');
+
+        const victoryModal = document.getElementById('victoryModal');
+        const victoryTitle = document.getElementById('victoryTitle');
+        const victorySubtitle = document.getElementById('victorySubtitle');
+        const modalStats1P = document.getElementById('modalStats1P');
+        const modalStats2P = document.getElementById('modalStats2P');
+        const modalPairs = document.getElementById('modalPairs');
+        const modalTries = document.getElementById('modalTries');
+        const modalTime = document.getElementById('modalTime');
+        const modalP1Score = document.getElementById('modalP1Score');
+        const modalP2Score = document.getElementById('modalP2Score');
+        const modalPlayAgainBtn = document.getElementById('modalPlayAgainBtn');
+
+        const gameOverModal = document.getElementById('gameOverModal');
+        const gameOverSubtitle = document.getElementById('gameOverSubtitle');
+        const gameOverMatched = document.getElementById('gameOverMatched');
+        const gameOverMaxMisses = document.getElementById('gameOverMaxMisses');
+        const gameOverTryAgainBtn = document.getElementById('gameOverTryAgainBtn');
+
+        // Leaderboard Modal Elements
+        const leaderboardModal = document.getElementById('leaderboardModal');
+        const closeLeaderboardBtn = document.getElementById('closeLeaderboardBtn');
+        const closeLeaderboardFooterBtn = document.getElementById('closeLeaderboardFooterBtn');
+        const clearLeaderboardBtn = document.getElementById('clearLeaderboardBtn');
+        const leaderboardBody = document.getElementById('leaderboardBody');
+        const noLeaderboardMsg = document.getElementById('noLeaderboardMsg');
+        const lbFilterAll = document.getElementById('lbFilterAll');
+        const lbFilterFaceUp = document.getElementById('lbFilterFaceUp');
+        const lbFilterMemory = document.getElementById('lbFilterMemory');
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const now = audioCtx.currentTime;
+            
+            if (type === 'button') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.08);
+            } else if (type === 'flip') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(250, now);
+                osc.frequency.exponentialRampToValueAtTime(500, now + 0.1);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'match') {
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+                    gain.gain.setValueAtTime(0.12, now + idx * 0.06);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.25);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.06);
+                    osc.stop(now + idx * 0.06 + 0.25);
+                });
+            } else if (type === 'miss') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.linearRampToValueAtTime(90, now + 0.25);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (type === 'turn') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.setValueAtTime(600, now + 0.08);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.16);
+            } else if (type === 'gameover') {
+                [300, 260, 220, 150].forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+                    gain.gain.setValueAtTime(0.2, now + idx * 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.12 + 0.2);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.12);
+                    osc.stop(now + idx * 0.12 + 0.2);
+                });
+            } else if (type === 'victory') {
+                const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+                    gain.gain.setValueAtTime(0.15, now + idx * 0.09);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.35);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.09);
+                    osc.stop(now + idx * 0.09 + 0.35);
+                });
+            }
+        }
+
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const tenths = Math.floor((ms % 1000) / 100);
+
+            const mStr = String(minutes).padStart(2, '0');
+            const sStr = String(seconds).padStart(2, '0');
+
+            return `${mStr}:${sStr}.${tenths}`;
+        }
+
+        function startTimer() {
+            if (isTimerRunning) return;
+            isTimerRunning = true;
+            hasTimerStarted = true;
+            startTime = Date.now() - elapsedTime;
+            if (timerStatusSub) timerStatusSub.textContent = 'Timer running!';
+
+            timerInterval = setInterval(() => {
+                elapsedTime = Date.now() - startTime;
+                if (timerDisplay) timerDisplay.textContent = formatTime(elapsedTime);
+            }, 100);
+        }
+
+        function stopTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            isTimerRunning = false;
+        }
+
+        function resetTimer() {
+            stopTimer();
+            elapsedTime = 0;
+            hasTimerStarted = false;
+            if (timerDisplay) timerDisplay.textContent = '00:00.0';
+            if (timerStatusSub) timerStatusSub.textContent = 'Tap card to start';
+            updateBestTimeDisplay();
+        }
+
+        function updateBestTimeDisplay() {
+            const records = leaderboardHistory.filter(item => item.pairs === numPairs && item.mode === gameMode && item.maxAddend === maxAddend);
+            if (records.length > 0) {
+                const best = Math.min(...records.map(r => r.timeMs));
+                if (bestTimeDisplay) bestTimeDisplay.textContent = formatTime(best);
+            } else {
+                if (bestTimeDisplay) bestTimeDisplay.textContent = '--:--.-';
+            }
+        }
+
+        function saveTimeRecord(finalMs) {
+            const newRecord = {
+                id: Date.now(),
+                date: new Date().toLocaleDateString(),
+                pairs: numPairs,
+                maxAddend: maxAddend,
+                mode: gameMode,
+                timeMs: finalMs,
+                timeFormatted: formatTime(finalMs)
+            };
+
+            leaderboardHistory.push(newRecord);
+            leaderboardHistory.sort((a, b) => a.timeMs - b.timeMs);
+            try {
+                localStorage.setItem('addition_match_leaderboard', JSON.stringify(leaderboardHistory));
+            } catch (e) {}
+            updateBestTimeDisplay();
+        }
+
+        function renderLeaderboard(filter = 'all') {
+            currentLeaderboardFilter = filter;
+            
+            [lbFilterAll, lbFilterFaceUp, lbFilterMemory].forEach(btn => {
+                btn.className = 'px-3 py-1 rounded-lg text-slate-400 hover:text-white';
+            });
+            if (filter === 'all') lbFilterAll.className = 'px-3 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold';
+            if (filter === 'face-up') lbFilterFaceUp.className = 'px-3 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold';
+            if (filter === 'memory') lbFilterMemory.className = 'px-3 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold';
+
+            let filtered = leaderboardHistory;
+            if (filter === 'face-up') filtered = leaderboardHistory.filter(r => r.mode === 'face-up');
+            if (filter === 'memory') filtered = leaderboardHistory.filter(r => r.mode === 'memory');
+
+            leaderboardBody.innerHTML = '';
+            if (filtered.length === 0) {
+                noLeaderboardMsg.classList.remove('hidden');
+            } else {
+                noLeaderboardMsg.classList.add('hidden');
+                filtered.slice(0, 15).forEach((record, idx) => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b border-slate-800/60 hover:bg-slate-900/50 transition-colors';
+                    row.innerHTML = `
+                        <td class="py-2 px-2 font-game text-amber-400">${idx + 1}</td>
+                        <td class="py-2 px-2 font-bold text-slate-300 capitalize">${record.mode}</td>
+                        <td class="py-2 px-2 text-amber-300 font-bold">${record.maxAddend || 10}</td>
+                        <td class="py-2 px-2 text-cyan-400 font-bold">${record.pairs}</td>
+                        <td class="py-2 px-2 font-game text-emerald-400">${record.timeFormatted}</td>
+                        <td class="py-2 px-2 text-right text-slate-500 text-[10px] sm:text-xs">${record.date}</td>
+                    `;
+                    leaderboardBody.appendChild(row);
+                });
+            }
+        }
+
+        function updateMaxLivesOptions() {
+            const pairs = parseInt(pairSelect.value, 10);
+            const totalCards = pairs * 2;
+            const currentSelected = parseInt(maxLivesSelect.value, 10);
+
+            const options = [
+                { val: totalCards, label: `${totalCards} Misses (1x Cards)` },
+                { val: Math.round(totalCards * 1.5), label: `${Math.round(totalCards * 1.5)} Misses (1.5x Cards)` },
+                { val: totalCards * 2, label: `${totalCards * 2} Misses (2x Cards)` },
+                { val: totalCards * 3, label: `${totalCards * 3} Misses (3x Cards)` }
+            ];
+
+            maxLivesSelect.innerHTML = '';
+            let isPreviousValAvailable = false;
+
+            options.forEach(opt => {
+                const el = document.createElement('option');
+                el.value = opt.val;
+                el.textContent = opt.label;
+                if (opt.val === currentSelected) {
+                    el.selected = true;
+                    isPreviousValAvailable = true;
+                }
+                maxLivesSelect.appendChild(el);
+            });
+
+            if (!isPreviousValAvailable) {
+                maxLivesSelect.selectedIndex = 1; // Default to 1.5x option
+            }
+        }
+
+        function updatePlayerStatusUI() {
+            if (playerCount === 1) {
+                statusBar1P.classList.remove('hidden');
+                statusBar1P.classList.add('flex');
+                statusBar2P.classList.add('hidden');
+                statusBar2P.classList.remove('flex');
+            } else {
+                statusBar1P.classList.add('hidden');
+                statusBar1P.classList.remove('flex');
+                statusBar2P.classList.remove('hidden');
+                statusBar2P.classList.add('flex');
+
+                if (activePlayer === 1) {
+                    turnIndicator.textContent = "Player 1's Turn";
+                    turnIndicator.className = 'font-game text-xs sm:text-sm text-cyan-400 uppercase tracking-wide';
+                    p1ScoreCard.classList.add('turn-active-p1');
+                    p2ScoreCard.classList.remove('turn-active-p2');
+                } else {
+                    turnIndicator.textContent = "Player 2's Turn";
+                    turnIndicator.className = 'font-game text-xs sm:text-sm text-fuchsia-400 uppercase tracking-wide';
+                    p2ScoreCard.classList.add('turn-active-p2');
+                    p1ScoreCard.classList.remove('turn-active-p1');
+                }
+            }
+        }
+
+        function updateLifeBarUI() {
+            if (p1LivesText) p1LivesText.textContent = p1Lives;
+            if (p1MaxLivesText) p1MaxLivesText.textContent = p1MaxLives;
+
+            const p1Pct = Math.max(0, Math.min(100, (p1Lives / p1MaxLives) * 100));
+            const isMobile = window.innerWidth < 1024;
+
+            if (p1LifeBarFill) {
+                if (isMobile) {
+                    p1LifeBarFill.style.width = `${p1Pct}%`;
+                    p1LifeBarFill.style.height = '100%';
+                } else {
+                    p1LifeBarFill.style.height = `${p1Pct}%`;
+                    p1LifeBarFill.style.width = '100%';
+                }
+
+                p1LifeBarFill.classList.remove('life-bar-critical-red', 'life-bar-critical-cyan');
+                if (p1Lives <= 2 && p1Lives > 0) {
+                    if (playerCount === 1) {
+                        p1LifeBarFill.classList.add('life-bar-critical-red');
+                    } else {
+                        p1LifeBarFill.classList.add('life-bar-critical-cyan');
+                    }
+                }
+            }
+
+            if (playerCount === 2) {
+                if (p2LivesText) p2LivesText.textContent = p2Lives;
+                if (p2MaxLivesText) p2MaxLivesText.textContent = p2MaxLives;
+
+                const p2Pct = Math.max(0, Math.min(100, (p2Lives / p2MaxLives) * 100));
+                if (p2LifeBarFill) {
+                    if (isMobile) {
+                        p2LifeBarFill.style.width = `${p2Pct}%`;
+                        p2LifeBarFill.style.height = '100%';
+                    } else {
+                        p2LifeBarFill.style.height = `${p2Pct}%`;
+                        p2LifeBarFill.style.width = '100%';
+                    }
+
+                    p2LifeBarFill.classList.remove('life-bar-critical-pink');
+                    if (p2Lives <= 2 && p2Lives > 0) {
+                        p2LifeBarFill.classList.add('life-bar-critical-pink');
+                    }
+                }
+            }
+        }
+
+        function setGameMode(mode) {
+            if (gameMode === mode) return;
+            playSound('button');
+            gameMode = mode;
+
+            if (mode === 'face-up') {
+                modeFaceUpBtn.className = 'px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 bg-cyan-500 text-slate-950 font-black shadow-[0_0_12px_rgba(6,182,212,0.6)]';
+                modeMemoryBtn.className = 'px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 text-slate-400 hover:text-cyan-300';
+            } else {
+                modeMemoryBtn.className = 'px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 bg-cyan-500 text-slate-950 font-black shadow-[0_0_12px_rgba(6,182,212,0.6)]';
+                modeFaceUpBtn.className = 'px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 text-slate-400 hover:text-cyan-300';
+            }
+
+            initGame();
+        }
+
+        function setPlayerCount(count) {
+            if (playerCount === count) return;
+            playSound('button');
+            playerCount = count;
+
+            if (count === 1) {
+                players1Btn.className = 'px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 bg-cyan-500 text-slate-950 font-black shadow-[0_0_12px_rgba(6,182,212,0.6)]';
+                players2Btn.className = 'px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 text-slate-400 hover:text-cyan-300';
+            } else {
+                players2Btn.className = 'px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 bg-cyan-500 text-slate-950 font-black shadow-[0_0_12px_rgba(6,182,212,0.6)]';
+                players1Btn.className = 'px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 text-slate-400 hover:text-cyan-300';
+            }
+
+            initGame();
+        }
+
+        function configureGrid(totalCards) {
+            cardGrid.className = 'w-full grid gap-2.5 sm:gap-4 justify-items-center items-center';
+            if (totalCards <= 8) {
+                cardGrid.classList.add('grid-cols-4');
+            } else if (totalCards <= 12) {
+                cardGrid.classList.add('grid-cols-3', 'sm:grid-cols-4');
+            } else if (totalCards <= 16) {
+                cardGrid.classList.add('grid-cols-4');
+            } else if (totalCards <= 20) {
+                cardGrid.classList.add('grid-cols-4', 'sm:grid-cols-5');
+            } else {
+                cardGrid.classList.add('grid-cols-4', 'sm:grid-cols-6');
+            }
+        }
+
+        function renderGrid() {
+            cardGrid.innerHTML = '';
+            
+            cards.forEach((card, index) => {
+                const cardContainer = document.createElement('div');
+                cardContainer.id = `card-container-${index}`;
+                
+                // Adjust font sizes according to content length
+                const fontSizeClass = card.displayChar.length > 5 ? 'text-xl sm:text-3xl md:text-4xl' : 
+                                     card.displayChar.length > 3 ? 'text-2xl sm:text-4xl md:text-5xl' : 
+                                     'text-3xl sm:text-5xl md:text-6xl';
+
+                cardContainer.className = `card-container w-16 h-20 sm:w-24 sm:h-32 md:w-28 md:h-36 cursor-pointer transform transition-transform hover:scale-105 active:scale-95 ${card.isFlipped ? '' : 'is-flipped'}`;
+
+                cardContainer.innerHTML = `
+                    <div class="card-inner w-full h-full">
+                        <div class="card-face card-front neon-card-front" style="border-color: ${card.neonColor}; color: ${card.neonColor}; box-shadow: 0 0 15px ${card.neonColor}66, inset 0 0 10px ${card.neonColor}33;">
+                            <span class="font-game ${fontSizeClass} drop-shadow-[0_0_12px_currentColor]">${card.displayChar}</span>
+                            <span class="absolute bottom-1.5 text-[9px] sm:text-xs font-bold uppercase tracking-wider opacity-70">${card.type}</span>
+                        </div>
+                        <div class="card-face card-back flex flex-col items-center justify-center">
+                            <i class="fa-solid fa-plus text-2xl sm:text-3xl text-indigo-400/80 animate-pulse"></i>
+                        </div>
+                    </div>
+                `;
+
+                cardContainer.addEventListener('click', () => handleCardClick(index));
+                cardGrid.appendChild(cardContainer);
+            });
+        }
+
+        function generateAdditionPairs(count, maxVal) {
+            const pairs = [];
+            const usedKeys = new Set();
+            const usedSums = new Set();
+
+            let attempts = 0;
+            while (pairs.length < count && attempts < 1000) {
+                attempts++;
+                const a = Math.floor(Math.random() * maxVal) + 1;
+                const b = Math.floor(Math.random() * maxVal) + 1;
+                const sum = a + b;
+                const key = `${a}+${b}`;
+
+                // Prefer unique sums across the board to avoid player confusion when matching sums
+                if (!usedKeys.has(key) && (!usedSums.has(sum) || attempts > 500)) {
+                    usedKeys.add(key);
+                    usedSums.add(sum);
+                    pairs.push({
+                        id: `pair-${pairs.length}-${Date.now()}`,
+                        a: a,
+                        b: b,
+                        equationStr: `${a} + ${b}`,
+                        sumStr: `${sum}`,
+                        sum: sum
+                    });
+                }
+            }
+            return pairs;
+        }
+
+        function initGame() {
+            // Read user defined max addend
+            let rawMax = parseInt(maxAddendInput.value, 10);
+            if (isNaN(rawMax) || rawMax < 2) rawMax = 2;
+            if (rawMax > 100) rawMax = 100;
+            maxAddend = rawMax;
+            maxAddendInput.value = maxAddend;
+
+            numPairs = parseInt(pairSelect.value, 10);
+            updateMaxLivesOptions();
+            resetTimer();
+
+            maxLivesSetting = parseInt(maxLivesSelect.value, 10);
+
+            if (playerCount === 1) {
+                p1MaxLives = maxLivesSetting;
+                p1Lives = p1MaxLives;
+            } else {
+                p1MaxLives = Math.max(1, Math.floor(maxLivesSetting / 2));
+                p1Lives = p1MaxLives;
+                p2MaxLives = Math.max(1, Math.floor(maxLivesSetting / 2));
+                p2Lives = p2MaxLives;
+            }
+
+            matchedPairsCount = 0;
+            triesCount = 0;
+            p1Score = 0;
+            p2Score = 0;
+            activePlayer = 1;
+            selectedCards = [];
+            isProcessing = false;
+
+            if (matchCountEl) matchCountEl.textContent = matchedPairsCount;
+            if (totalPairsEl) totalPairsEl.textContent = numPairs;
+            if (triesCountEl) triesCountEl.textContent = triesCount;
+            if (p1ScoreEl) p1ScoreEl.textContent = p1Score;
+            if (p2ScoreEl) p2ScoreEl.textContent = p2Score;
+            if (currentModeLabel) currentModeLabel.textContent = gameMode === 'face-up' ? 'Face Up' : 'Memory';
+            
+            victoryModal.classList.add('hidden');
+            gameOverModal.classList.add('hidden');
+
+            updateSidePanelsStyling();
+            updatePlayerStatusUI();
+            updateLifeBarUI();
+
+            const generatedAdditionPairs = generateAdditionPairs(numPairs, maxAddend);
+
+            cards = [];
+            generatedAdditionPairs.forEach((pair, idx) => {
+                const neonColor = NEON_PALETTE[idx % NEON_PALETTE.length];
+                
+                // Equation Card (e.g. "4 + 3")
+                cards.push({
+                    pairId: pair.id,
+                    displayChar: pair.equationStr,
+                    type: 'equation',
+                    neonColor: neonColor,
+                    isMatched: false,
+                    isFlipped: gameMode === 'face-up'
+                });
+
+                // Sum Card (e.g. "7")
+                cards.push({
+                    pairId: pair.id,
+                    displayChar: pair.sumStr,
+                    type: 'sum',
+                    neonColor: neonColor,
+                    isMatched: false,
+                    isFlipped: gameMode === 'face-up'
+                });
+            });
+
+            cards.sort(() => Math.random() - 0.5);
+            configureGrid(cards.length);
+            renderGrid();
+        }
+
+        function updateSidePanelsStyling() {
+            if (playerCount === 1) {
+                leftSidePanel.className = 'w-full lg:w-48 bg-slate-900/90 backdrop-blur-md rounded-3xl border-2 border-red-600/70 p-3 sm:p-4 flex lg:flex-col items-center justify-between gap-3 shadow-[0_0_30px_rgba(239,68,68,0.3)] transition-all';
+                p1HeartBox.className = 'w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-red-950/90 border-2 border-red-500/80 flex items-center justify-center text-red-500 text-xl sm:text-2xl shadow-[0_0_15px_rgba(239,68,68,0.8)]';
+                p1LifeTitle.className = 'block text-xs sm:text-sm font-black text-red-400 tracking-wider uppercase';
+                p1LifeTitle.textContent = 'Life Bar';
+                p1SubTitle.textContent = '1P Mode';
+                
+                const track = p1LifeBarFill.parentElement;
+                track.className = 'flex-grow lg:flex-grow-0 w-full lg:w-16 h-8 sm:h-9 lg:h-72 bg-slate-950 rounded-2xl border-2 border-red-800/90 p-1.5 flex lg:flex-col-reverse items-center justify-start relative overflow-hidden shadow-[inset_0_0_15px_rgba(0,0,0,0.9)]';
+                p1LifeBarFill.className = 'life-bar-fill h-full lg:w-full bg-gradient-to-r lg:bg-gradient-to-t from-red-600 via-rose-500 to-red-400 rounded-xl w-full shadow-[0_0_20px_#ef4444]';
+                p1LivesNum.className = 'text-xl sm:text-2xl lg:text-3xl text-red-400 drop-shadow-[0_0_12px_rgba(239,68,68,0.9)]';
+
+                rightSidePanel.className = 'w-full lg:w-48 bg-slate-900/90 backdrop-blur-md rounded-3xl border-2 border-amber-500/70 p-3 sm:p-4 flex flex-row lg:flex-col items-center justify-between gap-3 shadow-[0_0_30px_rgba(245,158,11,0.3)] transition-all';
+                p1TimerContainer.classList.remove('hidden');
+                p1TimerContainer.classList.add('flex');
+                p2LifeContainer.classList.add('hidden');
+                p2LifeContainer.classList.remove('flex');
+            } else {
+                leftSidePanel.className = 'w-full lg:w-48 bg-slate-900/90 backdrop-blur-md rounded-3xl border-2 border-cyan-500/70 p-3 sm:p-4 flex lg:flex-col items-center justify-between gap-3 shadow-[0_0_30px_rgba(6,182,212,0.3)] transition-all';
+                p1HeartBox.className = 'w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-cyan-950/90 border-2 border-cyan-500/80 flex items-center justify-center text-cyan-400 text-xl sm:text-2xl shadow-[0_0_15px_rgba(6,182,212,0.8)]';
+                p1LifeTitle.className = 'block text-xs sm:text-sm font-black text-cyan-400 tracking-wider uppercase';
+                p1LifeTitle.textContent = 'P1 Life Bar';
+                p1SubTitle.textContent = 'Player 1';
+
+                const track = p1LifeBarFill.parentElement;
+                track.className = 'flex-grow lg:flex-grow-0 w-full lg:w-16 h-8 sm:h-9 lg:h-72 bg-slate-950 rounded-2xl border-2 border-cyan-800/90 p-1.5 flex lg:flex-col-reverse items-center justify-start relative overflow-hidden shadow-[inset_0_0_15px_rgba(0,0,0,0.9)]';
+                p1LifeBarFill.className = 'life-bar-fill h-full lg:w-full bg-gradient-to-r lg:bg-gradient-to-t from-cyan-600 via-teal-400 to-cyan-300 rounded-xl w-full shadow-[0_0_20px_#06b6d4]';
+                p1LivesNum.className = 'text-xl sm:text-2xl lg:text-3xl text-cyan-400 drop-shadow-[0_0_12px_rgba(6,182,212,0.9)]';
+
+                rightSidePanel.className = 'w-full lg:w-48 bg-slate-900/90 backdrop-blur-md rounded-3xl border-2 border-pink-500/70 p-3 sm:p-4 flex flex-row lg:flex-col items-center justify-between gap-3 shadow-[0_0_30px_rgba(236,72,153,0.3)] transition-all';
+                p1TimerContainer.classList.add('hidden');
+                p1TimerContainer.classList.remove('flex');
+                p2LifeContainer.classList.remove('hidden');
+                p2LifeContainer.classList.add('flex');
+            }
+        }
+
+        function handleCardClick(index) {
+            if (isProcessing) return;
+            if (playerCount === 1 && p1Lives <= 0) return;
+            if (playerCount === 2 && (p1Lives <= 0 || p2Lives <= 0)) return;
+
+            if (playerCount === 1 && !hasTimerStarted) {
+                startTimer();
+            }
+
+            const card = cards[index];
+            const cardContainer = document.getElementById(`card-container-${index}`);
+
+            if (card.isMatched || selectedCards.some(s => s.index === index)) {
+                return;
+            }
+
+            playSound('flip');
+
+            if (gameMode === 'memory') {
+                card.isFlipped = true;
+                cardContainer.classList.remove('is-flipped');
+            }
+
+            cardContainer.classList.add('card-selected');
+            selectedCards.push({ index, card, cardContainer });
+
+            if (selectedCards.length === 2) {
+                triesCount++;
+                if (triesCountEl) triesCountEl.textContent = triesCount;
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            isProcessing = true;
+            const [first, second] = selectedCards;
+            // A match occurs when both cards share the exact same pairId
+            const isMatched = first.card.pairId === second.card.pairId;
+
+            if (isMatched) {
+                playSound('match');
+                first.card.isMatched = true;
+                second.card.isMatched = true;
+
+                [first.cardContainer, second.cardContainer].forEach(el => {
+                    el.classList.remove('card-selected');
+                    el.classList.add('opacity-40', 'pointer-events-none', 'animate-pop');
+                });
+
+                matchedPairsCount++;
+                if (matchCountEl) matchCountEl.textContent = matchedPairsCount;
+
+                if (playerCount === 2) {
+                    if (activePlayer === 1) p1Score++;
+                    else p2Score++;
+
+                    p1ScoreEl.textContent = p1Score;
+                    p2ScoreEl.textContent = p2Score;
+                }
+
+                selectedCards = [];
+                isProcessing = false;
+
+                if (matchedPairsCount === numPairs) {
+                    triggerVictory(false);
+                }
+            } else {
+                playSound('miss');
+
+                [first.cardContainer, second.cardContainer].forEach(el => {
+                    el.classList.add('animate-shake');
+                });
+
+                if (playerCount === 1) {
+                    p1Lives--;
+                } else {
+                    if (activePlayer === 1) p1Lives--;
+                    else p2Lives--;
+                }
+
+                updateLifeBarUI();
+
+                if (playerCount === 1 && p1Lives <= 0) {
+                    setTimeout(() => {
+                        triggerGameOver("Your life bar ran out of power!");
+                    }, 500);
+                    return;
+                } else if (playerCount === 2 && (p1Lives <= 0 || p2Lives <= 0)) {
+                    setTimeout(() => {
+                        triggerVictory(true);
+                    }, 500);
+                    return;
+                }
+
+                setTimeout(() => {
+                    [first, second].forEach(item => {
+                        item.cardContainer.classList.remove('card-selected', 'animate-shake');
+                        if (gameMode === 'memory') {
+                            item.card.isFlipped = false;
+                            item.cardContainer.classList.add('is-flipped');
+                        }
+                    });
+
+                    if (playerCount === 2) {
+                        activePlayer = activePlayer === 1 ? 2 : 1;
+                        playSound('turn');
+                        updatePlayerStatusUI();
+                    }
+
+                    selectedCards = [];
+                    isProcessing = false;
+                }, 800);
+            }
+        }
+
+        function triggerGameOver(reasonText) {
+            stopTimer();
+            setTimeout(() => {
+                playSound('gameover');
+                if (gameOverSubtitle) gameOverSubtitle.textContent = reasonText || "Life bar depleted!";
+                if (gameOverMatched) gameOverMatched.textContent = matchedPairsCount;
+                if (gameOverMaxMisses) gameOverMaxMisses.textContent = maxLivesSetting;
+                gameOverModal.classList.remove('hidden');
+            }, 300);
+        }
+
+        function triggerVictory(isKnockout = false) {
+            stopTimer();
+            const finalTimeMs = elapsedTime;
+            const formattedFinalTime = formatTime(finalTimeMs);
+
+            setTimeout(() => {
+                playSound('victory');
+                
+                if (playerCount === 1) {
+                    saveTimeRecord(finalTimeMs);
+                    victoryTitle.textContent = "SUM MASTER!";
+                    victorySubtitle.textContent = "All addition equations matched to their sums!";
+                    modalStats1P.classList.remove('hidden');
+                    modalStats1P.classList.add('flex');
+                    modalStats2P.classList.add('hidden');
+                    modalStats2P.classList.remove('flex');
+                    if (modalPairs) modalPairs.textContent = numPairs;
+                    if (modalTries) modalTries.textContent = triesCount;
+                    if (modalTime) modalTime.textContent = formattedFinalTime;
+                } else {
+                    modalStats1P.classList.add('hidden');
+                    modalStats1P.classList.remove('flex');
+                    modalStats2P.classList.remove('hidden');
+                    modalStats2P.classList.add('flex');
+                    if (modalP1Score) modalP1Score.textContent = p1Score;
+                    if (modalP2Score) modalP2Score.textContent = p2Score;
+
+                    if (isKnockout) {
+                        if (p1Lives <= 0) {
+                            victoryTitle.textContent = "PLAYER 2 WINS!";
+                            victorySubtitle.textContent = "Player 1 ran out of lives!";
+                        } else {
+                            victoryTitle.textContent = "PLAYER 1 WINS!";
+                            victorySubtitle.textContent = "Player 2 ran out of lives!";
+                        }
+                    } else {
+                        if (p1Score > p2Score) {
+                            victoryTitle.textContent = "PLAYER 1 WINS!";
+                            victorySubtitle.textContent = "Player 1 ruled the math arena!";
+                        } else if (p2Score > p1Score) {
+                            victoryTitle.textContent = "PLAYER 2 WINS!";
+                            victorySubtitle.textContent = "Player 2 ruled the math arena!";
+                        } else {
+                            victoryTitle.textContent = "IT'S A TIE!";
+                            victorySubtitle.textContent = "Both math champions played brilliantly!";
+                        }
+                    }
+                }
+
+                victoryModal.classList.remove('hidden');
+
+                if (typeof confetti === 'function') {
+                    confetti({
+                        particleCount: 150,
+                        spread: 100,
+                        origin: { y: 0.6 }
+                    });
+                }
+            }, 500);
+        }
+
+        // Leaderboard modal listeners
+        leaderboardBtn.addEventListener('click', () => {
+            playSound('button');
+            renderLeaderboard(currentLeaderboardFilter);
+            leaderboardModal.classList.remove('hidden');
+        });
+
+        closeLeaderboardBtn.addEventListener('click', () => {
+            playSound('button');
+            leaderboardModal.classList.add('hidden');
+        });
+
+        closeLeaderboardFooterBtn.addEventListener('click', () => {
+            playSound('button');
+            leaderboardModal.classList.add('hidden');
+        });
+
+        clearLeaderboardBtn.addEventListener('click', () => {
+            playSound('button');
+            leaderboardHistory = [];
+            localStorage.removeItem('addition_match_leaderboard');
+            renderLeaderboard(currentLeaderboardFilter);
+            updateBestTimeDisplay();
+        });
+
+        lbFilterAll.addEventListener('click', () => { playSound('button'); renderLeaderboard('all'); });
+        lbFilterFaceUp.addEventListener('click', () => { playSound('button'); renderLeaderboard('face-up'); });
+        lbFilterMemory.addEventListener('click', () => { playSound('button'); renderLeaderboard('memory'); });
+
+        // Control listeners
+        modeFaceUpBtn.addEventListener('click', () => setGameMode('face-up'));
+        modeMemoryBtn.addEventListener('click', () => setGameMode('memory'));
+        players1Btn.addEventListener('click', () => setPlayerCount(1));
+        players2Btn.addEventListener('click', () => setPlayerCount(2));
+        
+        maxAddendInput.addEventListener('change', () => { playSound('button'); initGame(); });
+        pairSelect.addEventListener('change', () => { playSound('button'); initGame(); });
+        maxLivesSelect.addEventListener('change', () => { playSound('button'); initGame(); });
+        resetBtn.addEventListener('click', () => { playSound('button'); initGame(); });
+        modalPlayAgainBtn.addEventListener('click', () => { playSound('button'); initGame(); });
+        gameOverTryAgainBtn.addEventListener('click', () => { playSound('button'); initGame(); });
+
+        window.addEventListener('resize', updateLifeBarUI);
+        window.onload = initGame;
+    </script>
+</body>
+</html>
